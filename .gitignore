@@ -1,0 +1,38 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Generated data and models
+# These are created by running the project's scripts.
+dataset/
+models/
+
+# NLTK Data
+nltk_data/
+
+# Virtual Environments
+.env
+.venv
+env/
+venv/
+ENV/
+VENV/
+
+# IDE / Editor specific files
+.idea/
+.vscode/
+
+# Streamlit config
+.streamlit/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Scratch directory for temporary experiments
+scratch/
+
+# Log files
+*.log
