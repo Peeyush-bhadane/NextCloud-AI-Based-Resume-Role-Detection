@@ -1,0 +1,92 @@
+services:
+  # -------------------------------------------------------------
+  # 1. MariaDB Database Service (Nextcloud Metadata & User Store)
+  # -------------------------------------------------------------
+  nextcloud-db:
+    image: mariadb:10.6
+    container_name: nextcloud-db
+    restart: always
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    volumes:
+      - nextcloud_db_data:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-NextcloudRoot2026!}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-nextcloud}
+      - MYSQL_USER=${MYSQL_USER:-nextcloud_user}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-NextcloudUserPass2026!}
+    networks:
+      - nextcloud-network
+
+  # -------------------------------------------------------------
+  # 2. Redis Cache Service (Transactional File Locking & Caching)
+  # -------------------------------------------------------------
+  nextcloud-redis:
+    image: redis:alpine
+    container_name: nextcloud-redis
+    restart: always
+    networks:
+      - nextcloud-network
+
+  # -------------------------------------------------------------
+  # 3. Nextcloud Core Application (File Management & Cloud Suite)
+  # -------------------------------------------------------------
+  nextcloud-app:
+    image: nextcloud:apache
+    container_name: nextcloud-app
+    restart: always
+    ports:
+      - "${NEXTCLOUD_PORT:-8080}:80"
+    depends_on:
+      - nextcloud-db
+      - nextcloud-redis
+    volumes:
+      - nextcloud_data:/var/www/html
+    environment:
+      - MYSQL_HOST=nextcloud-db
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-nextcloud}
+      - MYSQL_USER=${MYSQL_USER:-nextcloud_user}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-NextcloudUserPass2026!}
+      - REDIS_HOST=nextcloud-redis
+      - NEXTCLOUD_ADMIN_USER=${NEXTCLOUD_ADMIN_USER:-admin}
+      - NEXTCLOUD_ADMIN_PASSWORD=${NEXTCLOUD_ADMIN_PASSWORD:-AdminSecurePassword2026!}
+      - NEXTCLOUD_TRUSTED_DOMAINS=${NEXTCLOUD_TRUSTED_DOMAINS:-localhost 127.0.0.1}
+    networks:
+      - nextcloud-network
+
+  # -------------------------------------------------------------
+  # 4. AI Resume Analyzer (Streamlit Machine Learning Web App)
+  # -------------------------------------------------------------
+  resume-analyzer-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: resume-analyzer-app
+    restart: unless-stopped
+    ports:
+      - "${STREAMLIT_PORT:-8501}:8501"
+    volumes:
+      - ./models:/app/models
+      - ./dataset:/app/dataset
+      - ./app.py:/app/app.py
+      - ./nextcloud_integration.py:/app/nextcloud_integration.py
+      - ./scoring.py:/app/scoring.py
+      - ./preprocess.py:/app/preprocess.py
+      - ./skill_analysis.py:/app/skill_analysis.py
+    environment:
+      - NEXTCLOUD_URL=http://nextcloud-app:80
+      - NEXTCLOUD_ADMIN_USER=${NEXTCLOUD_ADMIN_USER:-admin}
+      - NEXTCLOUD_ADMIN_PASSWORD=${NEXTCLOUD_ADMIN_PASSWORD:-AdminSecurePassword2026!}
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+    networks:
+      - nextcloud-network
+    depends_on:
+      - nextcloud-app
+
+volumes:
+  nextcloud_data:
+  nextcloud_db_data:
+
+networks:
+  nextcloud-network:
+    driver: bridge

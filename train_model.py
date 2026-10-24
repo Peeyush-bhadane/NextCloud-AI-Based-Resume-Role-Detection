@@ -29,9 +29,8 @@ def train_backend():
     # Feature Extraction (TF-IDF)
     print("Extracting TF-IDF Features...")
     tfidf = TfidfVectorizer(max_features=3000, stop_words='english')
-    X = tfidf.fit_transform(df['Cleaned_Resume']).toarray()
-    print("x is",X)
-    print(X.shape)
+    # Use a sparse matrix directly to save memory and improve performance
+    X = tfidf.fit_transform(df['Cleaned_Resume'])
     le = LabelEncoder()
     y = le.fit_transform(df['Category'])
 
@@ -54,7 +53,8 @@ def train_backend():
 
     for name, model in models.items():
         # k-Fold CV
-        cv_scores = cross_val_score(model, X_train, y_train, cv=kf)
+        # Parallelize cross-validation to speed up training
+        cv_scores = cross_val_score(model, X_train, y_train, cv=kf, n_jobs=-1)
         mean_cv_acc = cv_scores.mean()
         
         # Fit on train set
@@ -91,9 +91,6 @@ def train_backend():
         pickle.dump(role_ideal_skills, f)
 
     print("\nAll models and pre-cleaned benchmark patterns saved successfully.")
-
-if __name__ == "__main__":
-    train_backend()
 
 if __name__ == "__main__":
     train_backend()

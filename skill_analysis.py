@@ -23,16 +23,15 @@ SKILL_LIST = [
     'sap', 'oracle', 'financial analysis', 'auditing', 'banking', 'tally', 'excel', 'public relations'
 ]
 
+# Pre-compile a single regex for performance
+SKILL_REGEX = r'\b(' + '|'.join(re.escape(skill) for skill in SKILL_LIST) + r')\b'
+
 def extract_skills(text):
     """Extracts predefined skills from text using regex."""
-    found_skills = set()
-    cleaned_text = text.lower()
-    for skill in SKILL_LIST:
-        # Use regex to find whole word matches
-        pattern = r'\b' + re.escape(skill) + r'\b'
-        if re.search(pattern, cleaned_text):
-            found_skills.add(skill)
-    return list(found_skills)
+    if not text:
+        return []
+    # Find all matches in one pass
+    return list(set(re.findall(SKILL_REGEX, text.lower())))
 
 def get_top_skills_per_role(df):
     """Identifies the most common skills for each job role in the dataset."""

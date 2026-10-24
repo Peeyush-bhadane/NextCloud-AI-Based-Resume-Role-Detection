@@ -8,6 +8,11 @@ from preprocess import clean_resume_text, extract_text_from_pdf
 from skill_analysis import extract_skills
 from scoring import calculate_benchmark_metrics, generate_suggestions
 
+try:
+    from nextcloud_integration import NextcloudClient
+except ImportError:
+    NextcloudClient = None
+
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="ResumeBench | AI Dashboard", page_icon="🚀", layout="wide")
 
@@ -128,11 +133,56 @@ def load_engine():
 
 model, tfidf, le, role_skills, df_dataset = load_engine()
 
+# --- NEXTCLOUD SIDEBAR SUITE ---
+nc_client = None
+with st.sidebar:
+    st.markdown("### ☁️ Nextcloud Enterprise")
+    st.caption("Private Cloud Storage & ML Integration")
+    nc_url = st.text_input("Nextcloud URL", value=os.environ.get("NEXTCLOUD_URL", "http://localhost:8080"))
+    nc_user = st.text_input("Username", value=os.environ.get("NEXTCLOUD_ADMIN_USER", "admin"))
+    nc_pass = st.text_input("Password", value=os.environ.get("NEXTCLOUD_ADMIN_PASSWORD", "AdminSecurePassword2026!"), type="password")
+    
+    if NextcloudClient:
+        nc_client = NextcloudClient(base_url=nc_url, username=nc_user, password=nc_pass)
+        if st.button("🔗 Test Cloud Connection"):
+            with st.spinner("Connecting to Nextcloud..."):
+                ok, message = nc_client.check_connection()
+                if ok:
+                    st.success("Connected to Nextcloud!")
+                else:
+                    st.error(f"Offline: {message}")
+    else:
+        st.warning("`requests` package required for Nextcloud integration.")
+    
+    st.markdown("---")
+    st.markdown("### 📊 System Status")
+    st.markdown("• **Engine:** SVM + TF-IDF Active")
+    st.markdown("• **Database:** MariaDB 10.6")
+    st.markdown("• **Cache:** Redis Alpine")
+
 # --- APP LAYOUT ---
 st.markdown("<h1 class='neon-text' style='text-align:center; font-size:3rem; margin-bottom:10px;'>ML Resume Intelligence Engine</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align:center; color:#94a3b8; font-size:1.1rem; margin-bottom:50px;'>Pattern-Based Classification & Benchmarking Dashboard</p>", unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader("Upload Profile PDF", type=["pdf"])
+
+# --- NEXTCLOUD FETCH OPTION ---
+if nc_client and not uploaded_file:
+    try:
+        resumes_list = nc_client.list_resumes()
+        if resumes_list:
+            st.markdown("<p style='text-align:center; color:#94a3b8; font-size:1.1rem; margin-top:20px; margin-bottom:20px;'>Or Select from Nextcloud Cloud Repository</p>", unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                selected_cloud = st.selectbox("Cloud Resumes (/Resumes)", ["-- Select Cloud Resume --"] + resumes_list)
+                if selected_cloud != "-- Select Cloud Resume --":
+                    with st.spinner(f"Downloading {selected_cloud} from Nextcloud..."):
+                        cloud_file = nc_client.download_resume(selected_cloud)
+                        if cloud_file:
+                            cloud_file.name = selected_cloud
+                            uploaded_file = cloud_file
+    except Exception as e:
+        pass # ignore if folder doesn't exist or not connected
 
 if uploaded_file and model:
     with st.spinner("Analyzing profile vectors..."):
@@ -205,6 +255,43 @@ if uploaded_file and model:
             for tip in tips:
                 st.markdown(f"<p style='color:#94a3b8; margin-bottom:18px; font-size:1.1rem;'>⚡ {tip}</p>", unsafe_allow_html=True)
             st.markdown("</div></div>", unsafe_allow_html=True)
+
+            # --- NEXTCLOUD CLOUD ARCHIVAL ---
+            if nc_client:
+                st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+                st.markdown("<h3 style='color:#38bdf8 !important;'>☁️ Nextcloud Cloud Archival</h3>", unsafe_allow_html=True)
+                st.markdown("<p style='color:#94a3b8;'>Archive this candidate evaluation report to your private Nextcloud storage repository.</p>", unsafe_allow_html=True)
+                if st.button("Upload Report to Nextcloud (/Candidate_Reports)"):
+                    report_lines = [
+                        "AI RESUME READINESS & ROLE EVALUATION REPORT",
+                        "=" * 50,
+                        f"Target Role: {role}",
+                        f"Readiness Score: {readiness:.1f}%",
+                        f"Model Confidence: {confidence:.1f}%",
+                        "",
+                        "MATCHED SKILLS:",
+                        ", ".join(matched) if matched else "None",
+                        "",
+                        "CRITICAL GAPS:",
+                        ", ".join(missing) if missing else "None",
+                        "",
+                        "ARCHITECTURAL RECOMMENDATIONS:",
+                    ]
+                    for t in tips:
+                        report_lines.append(f"- {t}")
+                    report_text = "\n".join(report_lines)
+                    
+                    try:
+                        nc_client.ensure_folder("Candidate_Reports")
+                        clean_fn = "".join(c for c in uploaded_file.name if c.isalnum() or c in (' ', '.', '_')).rstrip()
+                        target_remote = f"Candidate_Reports/{clean_fn}_report.txt"
+                        if nc_client.upload_file(target_remote, report_text.encode('utf-8')):
+                            st.success(f"Report uploaded successfully to Nextcloud: `{target_remote}`")
+                        else:
+                            st.error("Failed to upload report to Nextcloud. Please verify credentials in the sidebar.")
+                    except Exception as nc_err:
+                        st.error(f"Nextcloud upload error: {nc_err}")
+                st.markdown("</div>", unsafe_allow_html=True)
 
         except Exception as e:
             st.error(f"Neural Dashboard Exception: {str(e)}")
